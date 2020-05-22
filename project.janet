@@ -19,12 +19,13 @@
            "-lgobject-2.0"
            "-lglib-2.0"])
 
-(declare-source
-  :source "test.janet")
+(declare-executable
+  :name "write"
+  :entry "write.janet")
 
 (declare-executable
-  :name "test"
-  :entry "test.janet")
+  :name "read"
+  :entry "read.janet")
 
 # (declare-executable
 #   :name "savepw"
