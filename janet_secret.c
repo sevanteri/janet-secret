@@ -10,11 +10,58 @@ static const SecretSchema simpleschema = {
     }
 };
 
+static GHashTable* schema_to_hashtable(const JanetKV *kv) {
+    GHashTable *hash = g_hash_table_new(g_str_hash, g_str_equal);
+    int32_t cap = janet_struct_capacity(kv);
+    const JanetKV *cur = NULL;
+    while ((cur = janet_dictionary_next(kv, cap, cur))) {
+        gchar *name = (gchar*)janet_unwrap_string(cur->key);
+        SecretSchemaAttributeType type = janet_unwrap_integer(cur->value);
+        g_hash_table_insert(hash, name, GUINT_TO_POINTER(type));
+    }
+    return hash;
+}
+
+static void extract_schema_variables(const JanetStruct schema,
+        gchar** name,
+        int32_t *flags,
+        GHashTable **attributes) {
+
+    Janet schema_name = janet_struct_get(schema, janet_ckeywordv("name"));
+    Janet schema_flags = janet_struct_get(schema, janet_ckeywordv("flags"));
+    Janet schema_attrs = janet_struct_get(schema, janet_ckeywordv("attributes"));
+
+    if (!janet_checktype(schema_name, JANET_STRING))
+        janet_panic("Schema name has to be a String\n");
+
+    if (!janet_checktype(schema_flags, JANET_NUMBER))
+        janet_panic("Schema flags has to be either schema/NONE or schema/DONT-MATCH-NAME\n");
+
+    if (!janet_checktype(schema_attrs, JANET_STRUCT))
+        janet_panic("Schema attributes has to be a Struct\n");
+
+    JanetStruct jattrs = janet_unwrap_struct(schema_attrs);
+
+    *attributes = schema_to_hashtable(jattrs);
+    *name = (gchar*)janet_unwrap_string(schema_name);
+    *flags = janet_unwrap_integer(schema_flags);
+}
+
+static GHashTable* attributes_to_hashtable(const JanetTable *table) {
+    GHashTable *hash = g_hash_table_new(g_str_hash, g_str_equal);
+    int32_t cap = table->capacity;
+    const JanetKV *cur = NULL;
+    while ((cur = janet_dictionary_next(table->data, cap, cur))) {
+        gchar *name = (gchar*)janet_unwrap_string(cur->key);
+        gchar *value = (gchar*)janet_unwrap_string(cur->value);
+        g_hash_table_insert(hash, name, value);
+    }
+    return hash;
+}
 
 static Janet save_password(int32_t argc, Janet *argv) {
     janet_fixarity(argc, 5);
     GError *error = NULL;
-    int32_t i;
 
     if (!janet_checktype(argv[0], JANET_STRUCT))
         janet_panic("Schema has to be a Struct\n");
@@ -36,44 +83,18 @@ static Janet save_password(int32_t argc, Janet *argv) {
         janet_panic("Password has to be a String\n");
     const gchar *password = janet_getcstring(argv, 4);
 
-    Janet schema_name = janet_struct_get(schema, janet_ckeywordv("name"));
-    Janet schema_flags = janet_struct_get(schema, janet_ckeywordv("flags"));
-    Janet schema_attrs = janet_struct_get(schema, janet_ckeywordv("attributes"));
-
-    JanetStruct jattrs = janet_unwrap_struct(schema_attrs);
-
-    GHashTable *attrs = g_hash_table_new(g_str_hash, g_str_equal);
-    int32_t cap = janet_struct_capacity(jattrs);
-    const JanetKV *cur = NULL;
-    while ((cur = janet_dictionary_next(jattrs, cap, cur))) {
-        gchar *name = (gchar*)janet_unwrap_string(cur->key);
-        SecretSchemaAttributeType type = janet_unwrap_integer(cur->value);
-
-        g_hash_table_insert(
-            attrs,
-            name,
-            GUINT_TO_POINTER(type)
-        );
-    }
+    gchar *name = NULL;
+    int32_t flags = -1;
+    GHashTable *schema_attributes = NULL;
+    extract_schema_variables(schema, &name, &flags, &schema_attributes);
 
     SecretSchema *the_schema = secret_schema_newv(
-        janet_unwrap_string(schema_name),
-        janet_unwrap_integer(schema_flags),
-        attrs
+        name,
+        flags,
+        schema_attributes
     );
 
-    GHashTable *pw_attrs = g_hash_table_new(g_str_hash, g_str_equal);
-    cap = attributes->capacity;
-    cur = NULL;
-    while ((cur = janet_dictionary_next(attributes->data, cap, cur))) {
-        gchar *name = (gchar*)janet_unwrap_string(cur->key);
-        gchar *value = (gchar*)janet_unwrap_string(cur->value);
-        g_hash_table_insert(
-            pw_attrs,
-            name,
-            value
-        );
-    }
+    GHashTable *pw_attrs = attributes_to_hashtable(attributes);
 
     gboolean ret = secret_password_storev_sync(
         the_schema,
@@ -84,7 +105,7 @@ static Janet save_password(int32_t argc, Janet *argv) {
         NULL, &error
     );
 
-    g_hash_table_destroy(attrs);
+    g_hash_table_destroy(schema_attributes);
     g_hash_table_destroy(pw_attrs);
     if (error != NULL) {
         g_error_free(error);
@@ -98,16 +119,36 @@ static Janet save_password(int32_t argc, Janet *argv) {
 }
 
 static Janet lookup_password(int32_t argc, Janet *argv) {
-    janet_fixarity(argc, 0);
-
+    janet_fixarity(argc, 2);
     GError *error = NULL;
 
-    gchar *password = secret_password_lookup_sync(
-            &simpleschema,
-            NULL,
-            &error,
-            NULL
-            );
+    if (!janet_checktype(argv[0], JANET_STRUCT))
+        janet_panic("Schema has to be a Struct\n");
+    JanetStruct schema = janet_getstruct(argv, 0);
+
+    if (!janet_checktype(argv[1], JANET_TABLE))
+        janet_panic("Attributes has to be a Table\n");
+    JanetTable *attributes = janet_gettable(argv, 1);
+
+    gchar *name = NULL;
+    int32_t flags = -1;
+    GHashTable *schema_attributes = NULL;
+    extract_schema_variables(schema, &name, &flags, &schema_attributes);
+
+    SecretSchema *the_schema = secret_schema_newv(
+        name,
+        flags,
+        schema_attributes
+    );
+
+    GHashTable *pw_attributes = attributes_to_hashtable(attributes);
+
+    gchar *password = secret_password_lookupv_sync(
+        the_schema,
+        pw_attributes,
+        NULL,
+        &error
+    );
 
     if (error != NULL) {
         g_error_free(error);
