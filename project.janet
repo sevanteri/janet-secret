@@ -18,15 +18,3 @@
            "-lgio-2.0"
            "-lgobject-2.0"
            "-lglib-2.0"])
-
-(declare-executable
-  :name "write"
-  :entry "write.janet")
-
-(declare-executable
-  :name "read"
-  :entry "read.janet")
-
-# (declare-executable
-#   :name "savepw"
-#   :entry "save.janet")
