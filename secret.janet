@@ -1,4 +1,4 @@
-(import build/secret :as _secret)
+(import _secret)
 
 
 (def- schema-flag-map {:none _secret/schema/NONE

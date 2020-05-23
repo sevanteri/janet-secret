@@ -1,10 +1,14 @@
 (declare-project
-  :name "janet-secret"
-  :description "Janet library for libsecret")
+  :name "secret"
+  :description "Janet library for libsecret"
+  :author "Pete Sevander"
+  :license "MIT"
+  :url "https://github.com/sevanteri/janet-secret"
+  :repo "git+https://github.com/sevanteri/janet-secret.git")
 
 (declare-native
-  :name "secret"
-  :source @["janet_secret.c"]
+  :name "_secret"
+  :source @["secret.c"]
   :cflags @["-I/usr/local/include/janet/"
             "-I/usr/include/libsecret-1"
             "-I/usr/include/glib-2.0"
@@ -20,4 +24,4 @@
            "-lglib-2.0"])
 
 (declare-source
-  :source "secret.janet")
+  :source ["secret.janet"])

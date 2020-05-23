@@ -1,3 +1,4 @@
+(module/add-paths ":cur:/../build/:all::native:" :native)
 (import secret)
 
 (def schema
