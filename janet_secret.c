@@ -22,10 +22,9 @@ static GHashTable* schema_to_hashtable(const JanetKV *kv) {
     return hash;
 }
 
-static void extract_schema_variables(const JanetStruct schema,
+static GHashTable* extract_schema_variables(const JanetStruct schema,
         gchar** name,
-        int32_t *flags,
-        GHashTable **attributes) {
+        int32_t *flags) {
 
     Janet schema_name = janet_struct_get(schema, janet_ckeywordv("name"));
     Janet schema_flags = janet_struct_get(schema, janet_ckeywordv("flags"));
@@ -42,9 +41,9 @@ static void extract_schema_variables(const JanetStruct schema,
 
     JanetStruct jattrs = janet_unwrap_struct(schema_attrs);
 
-    *attributes = schema_to_hashtable(jattrs);
     *name = (gchar*)janet_unwrap_string(schema_name);
     *flags = janet_unwrap_integer(schema_flags);
+    return schema_to_hashtable(jattrs);
 }
 
 static GHashTable* attributes_to_hashtable(const JanetTable *table) {
@@ -85,19 +84,18 @@ static Janet save_password(int32_t argc, Janet *argv) {
 
     gchar *name = NULL;
     int32_t flags = -1;
-    GHashTable *schema_attributes = NULL;
-    extract_schema_variables(schema, &name, &flags, &schema_attributes);
+    GHashTable *gattributes = extract_schema_variables(schema, &name, &flags);
 
-    SecretSchema *the_schema = secret_schema_newv(
+    SecretSchema *gschema = secret_schema_newv(
         name,
         flags,
-        schema_attributes
+        gattributes
     );
 
     GHashTable *pw_attrs = attributes_to_hashtable(attributes);
 
     gboolean ret = secret_password_storev_sync(
-        the_schema,
+        gschema,
         pw_attrs,
         collection,
         label,
@@ -105,7 +103,7 @@ static Janet save_password(int32_t argc, Janet *argv) {
         NULL, &error
     );
 
-    g_hash_table_destroy(schema_attributes);
+    g_hash_table_destroy(gattributes);
     g_hash_table_destroy(pw_attrs);
     if (error != NULL) {
         g_error_free(error);
@@ -132,24 +130,25 @@ static Janet lookup_password(int32_t argc, Janet *argv) {
 
     gchar *name = NULL;
     int32_t flags = -1;
-    GHashTable *schema_attributes = NULL;
-    extract_schema_variables(schema, &name, &flags, &schema_attributes);
+    GHashTable *gattributes = extract_schema_variables(schema, &name, &flags);
 
-    SecretSchema *the_schema = secret_schema_newv(
+    SecretSchema *gschema = secret_schema_newv(
         name,
         flags,
-        schema_attributes
+        gattributes
     );
 
     GHashTable *pw_attributes = attributes_to_hashtable(attributes);
 
     gchar *password = secret_password_lookupv_sync(
-        the_schema,
+        gschema,
         pw_attributes,
         NULL,
         &error
     );
 
+    g_hash_table_destroy(gattributes);
+    g_hash_table_destroy(pw_attributes);
     if (error != NULL) {
         g_error_free(error);
         return janet_wrap_nil();
@@ -163,6 +162,46 @@ static Janet lookup_password(int32_t argc, Janet *argv) {
     }
 }
 
+static Janet remove_password(int32_t argc, Janet *argv) {
+    janet_fixarity(argc, 2);
+    GError *error = NULL;
+
+    if (!janet_checktype(argv[0], JANET_STRUCT))
+        janet_panic("Schema has to be a Struct\n");
+    JanetStruct schema = janet_getstruct(argv, 0);
+
+    if (!janet_checktype(argv[1], JANET_TABLE))
+        janet_panic("Attributes has to be a Table\n");
+    JanetTable *attributes = janet_gettable(argv, 1);
+
+    gchar *name = NULL;
+    int32_t flags = -1;
+    GHashTable *gattributes = extract_schema_variables(schema, &name, &flags);
+
+    SecretSchema *gschema = secret_schema_newv(
+        name,
+        flags,
+        gattributes
+    );
+
+    GHashTable *pw_attributes = attributes_to_hashtable(attributes);
+
+    gboolean ret = secret_password_clearv_sync(
+        gschema,
+        pw_attributes,
+        NULL,
+        &error
+    );
+
+    g_hash_table_destroy(gattributes);
+    g_hash_table_destroy(pw_attributes);
+    if (error != NULL) {
+        g_error_free(error);
+        return janet_wrap_nil();
+    } 
+    return janet_wrap_boolean(ret);
+}
+
 static const JanetReg funs[] = {
     {"save-password", save_password,
         "(secret/save-password)\n\n"
@@ -170,6 +209,10 @@ static const JanetReg funs[] = {
     },
     {"lookup-password", lookup_password,
         "(secret/lookup-password)\n\n"
+        "A fine documentation."
+    },
+    {"remove-password", remove_password,
+        "(secret/remove-password)\n\n"
         "A fine documentation."
     },
     {NULL, NULL, NULL}

@@ -18,3 +18,6 @@
            "-lgio-2.0"
            "-lgobject-2.0"
            "-lglib-2.0"])
+
+(declare-source
+  :source "secret.janet")
