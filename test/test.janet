@@ -15,7 +15,7 @@
 (let [res (secret/save-password
             schema
             attributes
-            :default
+            :session
             "test label"
             "secr3tpassword123")]
   (assert (= res true) "Couldn't save password"))

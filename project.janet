@@ -9,6 +9,7 @@
 (declare-native
   :name "_secret"
   :source @["secret.c"]
+  # pkg-config --cflags janet glib-2.0 libsecret-1
   :cflags @["-I/usr/local/include/janet/"
             "-I/usr/include/libsecret-1"
             "-I/usr/include/glib-2.0"
@@ -16,6 +17,7 @@
             "-pthread"
             "-I/usr/include/libmount"
             "-I/usr/include/blkid"]
+  # pkg-config --libs janet glib-2.0 libsecret-1
  :lflags @["-L/usr/local/lib"
            "-ljanet"
            "-lsecret-1"
