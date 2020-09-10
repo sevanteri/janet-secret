@@ -19,7 +19,7 @@
             "-I/usr/include/blkid"]
   # pkg-config --libs janet glib-2.0 libsecret-1
  :lflags @["-L/usr/local/lib"
-           "-ljanet"
+#           "-ljanet"
            "-lsecret-1"
            "-lgio-2.0"
            "-lgobject-2.0"
