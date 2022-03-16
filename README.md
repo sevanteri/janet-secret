@@ -17,7 +17,7 @@ Only synchronous functions are implemented for now.
 
 # Examples
 
-For more more details check the [libsecret manual](https://developer.gnome.org/libsecret/0.18/).
+For more more details check the [libsecret manual](https://developer-old.gnome.org/libsecret/0.18/).
 
 First you need a schema. Define it as a struct.
 
